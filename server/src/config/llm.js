@@ -1,4 +1,4 @@
-const env = require('./env');
+import env from './env.js';
 
 const apiKeyMap = {
   openai: env.OPENAI_API_KEY,
@@ -8,7 +8,7 @@ const apiKeyMap = {
 const LLM_CONFIG = {
   provider: env.LLM_PROVIDER,
   apiKey: apiKeyMap[env.LLM_PROVIDER] || null,
-  timeout: env.LLM_TIMEOUT
+  timeout: env.LLM_TIMEOUT,
 };
 
-module.exports = LLM_CONFIG;
+export default LLM_CONFIG;

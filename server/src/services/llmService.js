@@ -1,6 +1,6 @@
-const LLM_CONFIG = require('../config/llm');
-const TABELA_COMPLETA = require('../data/tabela');
-const { criarPromptInterpretacao, promptEmergencia } = require('./promptService');
+import LLM_CONFIG from '../config/llm.js';
+import TABELA_COMPLETA from '../data/tabela.js';
+import { criarPromptInterpretacao, promptEmergencia } from './promptService.js';
 
 function criarSignal() {
   const controller = new AbortController();
@@ -10,7 +10,7 @@ function criarSignal() {
 
 async function chamarLLM(prompt) {
   if (!LLM_CONFIG.apiKey && LLM_CONFIG.provider !== 'mock') {
-    console.warn("⚠️ Sem API key, usando modo emergência criativa");
+    console.warn('⚠️ Sem API key, usando modo emergência criativa');
     return null;
   }
 
@@ -23,29 +23,22 @@ async function chamarLLM(prompt) {
     if (LLM_CONFIG.provider === 'openai') {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LLM_CONFIG.apiKey}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { Authorization: `Bearer ${LLM_CONFIG.apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.9,
-          max_tokens: 500
+          max_tokens: 500,
         }),
-        signal
+        signal,
       });
       if (!response.ok) {
         const corpo = await response.text().catch(() => '(sem corpo)');
-        const retryAfter = response.headers.get('retry-after');
-        console.error(`❌ [openai] HTTP ${response.status} ${response.statusText}`);
-        console.error(`   Corpo: ${corpo}`);
-        if (retryAfter) console.error(`   Retry-After: ${retryAfter}s`);
+        console.error(`❌ [openai] HTTP ${response.status}  ${corpo}`);
         throw new Error(`HTTP ${response.status}`);
       }
       const data = await response.json();
       return data.choices[0].message.content;
-
     } else if (LLM_CONFIG.provider === 'gemini') {
       response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${LLM_CONFIG.apiKey}`,
@@ -54,23 +47,19 @@ async function chamarLLM(prompt) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.9, maxOutputTokens: 500 }
+            generationConfig: { temperature: 0.9, maxOutputTokens: 500 },
           }),
-          signal
-        }
+          signal,
+        },
       );
       if (!response.ok) {
         const corpo = await response.text().catch(() => '(sem corpo)');
-        const retryAfter = response.headers.get('retry-after');
-        console.error(`❌ [gemini] HTTP ${response.status} ${response.statusText}`);
-        console.error(`   Corpo: ${corpo}`);
-        if (retryAfter) console.error(`   Retry-After: ${retryAfter}s`);
+        console.error(`❌ [gemini] HTTP ${response.status}  ${corpo}`);
         throw new Error(`HTTP ${response.status}`);
       }
       const data = await response.json();
       return data.candidates[0].content.parts[0].text;
     }
-
   } catch (error) {
     if (error.name === 'AbortError') {
       console.error(`❌ [${LLM_CONFIG.provider}] Timeout após ${LLM_CONFIG.timeout}ms`);
@@ -83,7 +72,7 @@ async function chamarLLM(prompt) {
   }
 }
 
-async function interpretarComLLM(input, modalidade, contextoAdicional = "") {
+export async function interpretarComLLM(input, modalidade, contextoAdicional = '') {
   const prompt = criarPromptInterpretacao(input, modalidade, contextoAdicional);
   let respostaLLM = await chamarLLM(prompt);
 
@@ -93,20 +82,17 @@ async function interpretarComLLM(input, modalidade, contextoAdicional = "") {
       const parsed = JSON.parse(respostaLLM);
 
       if (TABELA_COMPLETA.animais[parsed.grupo] === parsed.animal) {
-        return { source: "llm", ...parsed };
+        return { source: 'llm', ...parsed };
       }
 
-      console.warn("⚠️ LLM retornou animal inválido, usando emergência");
-      return { source: "emergencia_validacao", ...promptEmergencia(input, modalidade) };
-
+      console.warn('⚠️ LLM retornou animal inválido, usando emergência');
+      return { source: 'emergencia_validacao', ...promptEmergencia(input, modalidade) };
     } catch (parseError) {
-      console.error("❌ Erro ao parsear resposta da LLM:", parseError.message);
-      return { source: "emergencia_parse", ...promptEmergencia(input, modalidade) };
+      console.error('❌ Erro ao parsear resposta da LLM:', parseError.message);
+      return { source: 'emergencia_parse', ...promptEmergencia(input, modalidade) };
     }
   }
 
-  console.log("🔄 Usando modo emergência criativa (LLM retornou null)");
-  return { source: "emergencia", ...promptEmergencia(input, modalidade) };
+  console.log('🔄 Usando modo emergência criativa (LLM retornou null)');
+  return { source: 'emergencia', ...promptEmergencia(input, modalidade) };
 }
-
-module.exports = { interpretarComLLM };

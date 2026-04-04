@@ -1,16 +1,21 @@
 {
   "name": "oraculo-do-bicho",
-  "version": "1.0.0",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "dotenvx run -- node index.js"
-  },
+  "version": "3.0.0",
+  "private": true,
   "license": "MIT",
-  "devDependencies": {
-    "@dotenvx/dotenvx": "^1.59.1"
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "server": "npm run start --workspace=server",
+    "server:dev": "npm run dev --workspace=server",
+    "client": "npm run dev --workspace=client",
+    "client:build": "npm run build --workspace=client",
+    "dev": "concurrently \"npm run server:dev\" \"npm run client\"",
+    "install:all": "npm install --workspaces"
   },
-  "dependencies": {
-    "cors": "^2.8.6",
-    "express": "^5.2.1"
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

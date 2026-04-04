@@ -1,0 +1,1101 @@
+openapi: 3.0.3
+
+info:
+  title: Oráculo do Bicho API
+  description: |
+    API mística de interpretação para o **Jogo do Bicho** — contexto cultural brasileiro.
+
+    Utiliza LLM (Gemini ou OpenAI) para gerar interpretações criativas baseadas em sonhos,
+    números, contextos do dia a dia, cores e qualquer outro input fornecido pelo usuário.
+    As respostas sempre incluem o animal sugerido dentro da tabela oficial dos 25 bichos,
+    dezenas correspondentes e sugestões de aposta.
+
+    > ⚠️ **Aviso**: Uso 100% educacional. A API nunca usa fallback fixo — todas as
+    > interpretações são geradas dinamicamente pelo modelo de linguagem.
+
+    ## Repositório
+    ```
+    oraculo-do-bicho/
+    ├── server/   ← API Express (este documento)
+    ├── client/   ← SPA React + shadcn/ui + wagmi
+    └── doc/spec/ ← Este arquivo OpenAPI
+    ```
+
+    ## Fluxo principal
+    1. Usuário envia input textual (sonho, número, nome, contexto livre)
+    2. API envia ao LLM com o prompt mágico
+    3. LLM retorna animal + dezenas + justificativa
+    4. API valida contra a tabela oficial e retorna resposta estruturada
+
+    ## Pagamentos – Protocolo x402
+
+    Os endpoints `POST` são **pagos** via [x402 Protocol](https://docs.x402.org).
+    O protocolo usa HTTP 402 como gate de pagamento em USDC na rede Base.
+
+    ### Fluxo x402 (resumo)
+    ```
+    Client                     Server                  Facilitator
+      │── POST /interpretar ──▶│                             │
+      │◀── 402 ────────────────│                             │
+      │    PAYMENT-REQUIRED:   │                             │
+      │    base64(PaymentReq.) │                             │
+      │                        │                             │
+      │    [assina EIP-3009 TransferWithAuthorization]       │
+      │                        │                             │
+      │── POST /interpretar ──▶│                             │
+      │   PAYMENT-SIGNATURE:   │                             │
+      │   base64(PaymentPayload)│── POST /verify ───────────▶│
+      │                        │◀── { isValid: true } ───────│
+      │                        │── POST /settle ───────────▶│
+      │                        │◀── { txHash } ──────────────│
+      │◀── 200 ────────────────│                             │
+      │    PAYMENT-RESPONSE:   │                             │
+      │    base64(SettleResp.) │                             │
+    ```
+
+    ### Preços por endpoint
+    | Endpoint | Preço (USDC) |
+    |----------|--------------|
+    | `POST /interpretar` | $0.01 |
+    | `POST /sonho` | $0.01 |
+    | `POST /palpite` | $0.02 |
+    | `POST /numerologia` | $0.01 |
+    | `GET /tabela/animais` | Grátis |
+
+    ### Headers x402
+    - **Resposta 402 do servidor** → header `PAYMENT-REQUIRED: <base64(PaymentRequired)>`
+    - **Requisição do cliente** → header `PAYMENT-SIGNATURE: <base64(PaymentPayload)>`
+    - **Resposta 200 do servidor** → header `PAYMENT-RESPONSE: <base64(SettleResponse)>`
+
+    ### Redes suportadas
+    | Rede | Identificador CAIP-2 | Token |
+    |------|----------------------|-------|
+    | Base Sepolia (testnet) | `eip155:84532` | USDC |
+    | Base (mainnet) | `eip155:8453` | USDC |
+
+    ### Desabilitando pagamentos (desenvolvimento)
+    Deixe `EVM_ADDRESS` em branco no `.env` do servidor — todos os endpoints
+    ficam livres de pagamento.
+
+    ## Autenticação
+    Nenhuma autenticação HTTP necessária — a prova de pagamento é o `PAYMENT-SIGNATURE` header.
+
+  version: "3.0.0"
+  contact:
+    name: Oráculo do Bicho
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3001
+    description: Servidor local de desenvolvimento
+
+tags:
+  - name: Geral
+    description: Informações e saúde da API
+  - name: Interpretação
+    description: |
+      Endpoints de interpretação mística via LLM.
+      **Todos são pagos via x402 Protocol** — o cliente deve tratar respostas 402
+      e reenviar a requisição com o header `PAYMENT-SIGNATURE`.
+  - name: Tabela
+    description: Dados estáticos do jogo do bicho (gratuito)
+
+# ---------------------------------------------------------------------------
+# PATHS
+# ---------------------------------------------------------------------------
+paths:
+
+  # ── Root ────────────────────────────────────────────────────────────────
+  /:
+    get:
+      tags: [Geral]
+      summary: Informações da API
+      description: Retorna metadados, lista de endpoints disponíveis e exemplos de uso.
+      operationId: getApiInfo
+      responses:
+        "200":
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiInfo"
+              example:
+                nome: "API Místico dos Bichos v3 - Sem Hardcode 🎭"
+                versao: "3.0.0"
+                filosofía: "Nunca usamos fallback hardcoded"
+                endpoints:
+                  - path: "/interpretar"
+                    method: "POST"
+                    desc: "Interpretação principal (aceita qualquer input)"
+                  - path: "/sonho"
+                    method: "POST"
+                    desc: "Especialista em interpretação de sonhos"
+                  - path: "/palpite"
+                    method: "POST"
+                    desc: "Gera múltiplos palpites baseados em contexto"
+                  - path: "/numerologia"
+                    method: "POST"
+                    desc: "Análise numerológica personalizada"
+                  - path: "/tabela/animais"
+                    method: "GET"
+                    desc: "Tabela completa com significados"
+                aviso: "⚠️ 100% educacional"
+
+  # ── Health ───────────────────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [Geral]
+      summary: Status da API
+      description: Verifica se a API está online e se o provedor LLM está configurado.
+      operationId: getHealth
+      responses:
+        "200":
+          description: API online
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "online"
+                llm_provider: "gemini"
+                llm_status: "configured"
+                timestamp: "2026-04-04T12:00:00.000Z"
+
+  # ── Tabela de Animais ─────────────────────────────────────────────────
+  /tabela/animais:
+    get:
+      tags: [Tabela]
+      summary: Tabela completa dos 25 bichos
+      description: |
+        Retorna todos os 25 animais oficiais do jogo do bicho com seus
+        respectivos grupos, dezenas e significados simbólicos.
+      operationId: getTabelaAnimais
+      responses:
+        "200":
+          description: Lista de animais
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TabelaAnimaisResponse"
+              example:
+                success: true
+                total_animais: 25
+                animais:
+                  - id: 1
+                    nome: "Avestruz"
+                    dezenas: [1, 2, 3, 4]
+                    significado: "O Avestruz representa fuga e ilusão no imaginário popular."
+                  - id: 5
+                    nome: "Cachorro"
+                    dezenas: [17, 18, 19, 20]
+                    significado: "O Cachorro representa lealdade e amizade no imaginário popular."
+
+  # ── Interpretar ───────────────────────────────────────────────────────
+  /interpretar:
+    post:
+      tags: [Interpretação]
+      summary: Interpretação principal 💳
+      description: |
+        Endpoint principal da API. Aceita **qualquer input textual** e retorna uma
+        interpretação mística vinculada a um dos 25 animais do jogo do bicho.
+
+        O campo `modalidade` é opcional — se omitido, o LLM decide automaticamente
+        a modalidade mais adequada (sonho, número, cor, placa, palpite etc.).
+
+        Além da interpretação, retorna sugestões de aposta para grupo, dezena e milhar.
+      operationId: postInterpretar
+      x-x402:
+        price: "$0.01"
+        network: "eip155:84532"
+        token: "USDC"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterpretarRequest"
+            examples:
+              sonho:
+                summary: Interpretação de sonho com modalidade
+                value:
+                  input: "sonhei que nadava com golfinhos no oceano"
+                  modalidade: "sonho"
+              livre:
+                summary: Input livre sem modalidade
+                value:
+                  input: "vi uma placa com o número 42 esta manhã"
+              cor:
+                summary: Interpretação por cor
+                value:
+                  input: "hoje está tudo azul ao meu redor"
+                  modalidade: "generalizado"
+      responses:
+        "200":
+          description: Interpretação gerada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterpretarResponse"
+              example:
+                success: true
+                metadata:
+                  input_recebido: "sonhei que nadava com golfinhos"
+                  modalidade: "sonho"
+                  timestamp: "2026-04-04T12:00:00.000Z"
+                  tempo_processamento_ms: 1243
+                  fonte_interpretacao: "llm"
+                interpretacao:
+                  tipo: "sonho"
+                  animal: "Golfinho"
+                  grupo: 9
+                  dezenas: ["33", "34", "35", "36"]
+                  justificativa: "Golfinhos em sonho representam comunicação e harmonia..."
+                  confianca: "alta"
+                  variacoes:
+                    alternativa1: "Cavalo"
+                    alternativa2: "Águia"
+                  curiosidade: "..."
+                sugestoes_aposta:
+                  grupo:
+                    tipo: "animal"
+                    valor: "Cobra"
+                    multiplicador: "18x"
+                    aposta_minima: 2
+                    premio_estimado: "36x o valor"
+                  dezena:
+                    tipo: "dezena"
+                    valor: "35"
+                    multiplicador: "60x"
+                    aposta_minima: 1
+                    premio_estimado: "60x o valor"
+                  milhar_sugerida:
+                    tipo: "milhar"
+                    valor: "3527"
+                    multiplicador: "4000x"
+                    aposta_minima: 0.50
+                    premio_estimado: "2000x o valor"
+                mensagem_orientadora: "🌟 Conexão forte com o Cobra! Os sinais estão alinhados."
+        "402":
+          description: |
+            Pagamento necessário — retornado quando `EVM_ADDRESS` está configurado no servidor
+            e a requisição não inclui um `PAYMENT-SIGNATURE` válido.
+          headers:
+            PAYMENT-REQUIRED:
+              description: |
+                Header obrigatório do protocolo x402 v2.
+                Valor: `base64(JSON(PaymentRequired))` onde `PaymentRequired` tem o shape:
+                ```json
+                {
+                  "x402Version": 2,
+                  "resource": { "url": "string", "description": "string", "mimeType": "string" },
+                  "accepts": [{
+                    "scheme": "exact",
+                    "network": "eip155:84532",
+                    "amount": "10000",
+                    "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+                    "payTo": "0xYourAddress",
+                    "maxTimeoutSeconds": 60,
+                    "extra": { "name": "USDC", "version": "2" }
+                  }]
+                }
+                ```
+                O cliente deve:
+                1. Decodificar o header
+                2. Assinar um `TransferWithAuthorization` (EIP-3009) com a carteira do usuário
+                3. Reenviar a requisição com o header `PAYMENT-SIGNATURE`
+              schema:
+                type: string
+                example: "eyJ4NDAyVmVyc2lvbiI6MiwicmVzb3VyY2UiOi4uLn0="
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Payment required"
+        "400":
+          description: Input não fornecido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Forneça um 'input' para interpretação"
+
+  # ── Sonho ─────────────────────────────────────────────────────────────
+  /sonho:
+    post:
+      tags: [Interpretação]
+      summary: Interpretação de sonhos 💳
+      description: |
+        Endpoint especializado em análise onírica. Recebe a descrição do sonho
+        e opcionalmente detalhes adicionais. Retorna uma interpretação focada
+        em simbolismo dos sonhos para o jogo do bicho, com força do sinal e
+        mensagem espiritual.
+      operationId: postSonho
+      x-x402:
+        price: "$0.01"
+        network: "eip155:84532"
+        token: "USDC"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SonhoRequest"
+            examples:
+              simples:
+                summary: Sonho simples
+                value:
+                  sonho: "sonhei que estava voando sobre uma floresta"
+              com_detalhes:
+                summary: Sonho com detalhes adicionais
+                value:
+                  sonho: "um leão me perseguia"
+                  detalhes: "era de noite, estava chovendo muito"
+      responses:
+        "200":
+          description: Interpretação do sonho
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SonhoResponse"
+              example:
+                success: true
+                sonho: "um leão me perseguia"
+                interpretacao_onirica:
+                  simbolo_principal: "Leão"
+                  significado: "O leão em perseguição representa um desafio de liderança..."
+                  acao_recomendada: "Baseado neste sonho, considere apostar no Leão (Grupo 16)"
+                  forca_do_sinal: "🌕 Muito forte"
+                mensagem_espiritual: "✨ Seu subconsciente escolheu o Leão como mensageiro. ..."
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "400":
+          description: Sonho não fornecido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Descreva seu sonho para interpretação"
+
+  # ── Palpite ───────────────────────────────────────────────────────────
+  /palpite:
+    post:
+      tags: [Interpretação]
+      summary: Palpites do dia 💳
+      description: |
+        Gera **3 palpites simultâneos** baseados em:
+        1. O `contexto` fornecido pelo usuário
+        2. A data de referência (`data` ou data atual)
+        3. A energia cósmica do momento (fixo, interpretado pelo LLM)
+
+        Retorna a lista completa de 3 palpites e destaca o principal.
+        Tanto `contexto` quanto `data` são opcionais.
+      operationId: postPalpite
+      x-x402:
+        price: "$0.02"
+        network: "eip155:84532"
+        token: "USDC"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PalpiteRequest"
+            examples:
+              com_contexto:
+                summary: Com contexto e data
+                value:
+                  contexto: "hoje é meu aniversário"
+                  data: "2026-04-04"
+              sem_body:
+                summary: Sem body (palpite geral)
+                value: {}
+      responses:
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "200":
+          description: Palpites gerados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PalpiteResponse"
+              example:
+                success: true
+                data: "2026-04-04"
+                contexto_usado: "hoje é meu aniversário"
+                palpites_do_dia:
+                  - id: 1
+                    animal: "Tigre"
+                    grupo: 22
+                    dezenas: [85, 86, 87, 88]
+                    justificativa: "O Tigre surge com força neste dia especial..."
+                    forca: "alta"
+                  - id: 2
+                    animal: "Pavão"
+                    grupo: 19
+                    dezenas: [73, 74, 75, 76]
+                    justificativa: "A data ressoa com a beleza do Pavão..."
+                    forca: "media"
+                  - id: 3
+                    animal: "Águia"
+                    grupo: 2
+                    dezenas: [5, 6, 7, 8]
+                    justificativa: "A energia cósmica atual aponta para a Águia..."
+                    forca: "media"
+                palpite_principal:
+                  animal: "Tigre"
+                  grupo: 22
+                  mensagem: "🎯 DESTAQUE DO DIA: Tigre está com energia máxima!"
+
+  # ── Numerologia ───────────────────────────────────────────────────────
+  /numerologia:
+    post:
+      tags: [Interpretação]
+      summary: Análise numerológica 💳
+      description: |
+        Recebe uma lista de números e/ou um nome para análise numerológica.
+        Calcula a soma numerológica, redução e animal correspondente além de
+        usar o LLM para gerar uma análise criativa.
+
+        Pelo menos um dos campos (`numeros` ou `nome`) deve ser enviado para
+        obter uma análise significativa; ambos podem ser omitidos para
+        uma leitura genérica.
+      operationId: postNumerologia
+      x-x402:
+        price: "$0.01"
+        network: "eip155:84532"
+        token: "USDC"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NumerologiaRequest"
+            examples:
+              com_numeros:
+                summary: Análise por números
+                value:
+                  numeros: [7, 14, 22]
+              com_nome:
+                summary: Análise por nome
+                value:
+                  nome: "Maria"
+              completo:
+                summary: Números e nome juntos
+                value:
+                  numeros: [3, 9, 21]
+                  nome: "João"
+      responses:
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "200":
+          description: Análise numerológica
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NumerologiaResponse"
+              example:
+                success: true
+                numeros_analisados: [7, 14, 22]
+                nome_analisado: null
+                resultado:
+                  animal_da_sorte: "Cavalo"
+                  grupo: 11
+                  dezenas: [41, 42, 43, 44]
+                  soma_numerologica:
+                    valor: 43
+                    reducao: 7
+                    animal_correspondente: "Borboleta"
+                analise_completa: "Os números 7, 14 e 22 formam uma tríade poderosa..."
+
+# ---------------------------------------------------------------------------
+# COMPONENTS
+# ---------------------------------------------------------------------------
+components:
+
+  responses:
+    PaymentRequired:
+      description: |
+        Pagamento necessário — protocolo x402 v2.
+        O cliente deve decodificar o header `PAYMENT-REQUIRED`, assinar o payload
+        EIP-3009 com a carteira do usuário e reenviar a requisição com o header
+        `PAYMENT-SIGNATURE`. Veja a descrição da API para o fluxo completo.
+      headers:
+        PAYMENT-REQUIRED:
+          description: Base64-encoded PaymentRequired JSON (x402 v2)
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Payment required"
+
+  schemas:
+
+    # ── Requests ───────────────────────────────────────────────────────────
+
+    InterpretarRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: string
+          description: >
+            Qualquer texto para interpretação — sonho, número, frase, cor,
+            placa de carro, nome, data etc.
+          example: "sonhei que nadava com golfinhos no oceano"
+          minLength: 1
+        modalidade:
+          type: string
+          description: >
+            Modalidade de interpretação. Se omitida, o LLM decide automaticamente.
+          enum:
+            - sonho
+            - placa
+            - palpite
+            - numero
+            - data
+            - cor
+            - generalizado
+          example: "sonho"
+
+    SonhoRequest:
+      type: object
+      required:
+        - sonho
+      properties:
+        sonho:
+          type: string
+          description: Descrição do sonho que o usuário teve.
+          example: "sonhei que estava voando sobre uma floresta"
+          minLength: 1
+        detalhes:
+          type: string
+          description: Detalhes adicionais sobre o sonho (cenário, emoções, personagens etc.)
+          example: "era de noite, havia uma lua cheia"
+
+    PalpiteRequest:
+      type: object
+      properties:
+        contexto:
+          type: string
+          description: >
+            Contexto livre para personalizar os palpites (aniversário, evento,
+            sensação do dia etc.). Se omitido, usa "palpite geral do dia".
+          example: "hoje é meu aniversário"
+        data:
+          type: string
+          format: date
+          description: >
+            Data de referência no formato YYYY-MM-DD. Se omitida, usa a data atual.
+          example: "2026-04-04"
+
+    NumerologiaRequest:
+      type: object
+      properties:
+        numeros:
+          type: array
+          items:
+            type: integer
+          description: Lista de números a serem analisados numerologicamente.
+          example: [7, 14, 22]
+        nome:
+          type: string
+          description: Nome para análise numerológica junto ou separado dos números.
+          example: "Maria"
+
+    # ── Shared / Nested ────────────────────────────────────────────────────
+
+    Animal:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Número do grupo (1–25).
+          example: 11
+        nome:
+          type: string
+          description: Nome do animal.
+          example: "Cavalo"
+        dezenas:
+          type: array
+          items:
+            type: integer
+          description: As 4 dezenas correspondentes a este grupo.
+          example: [41, 42, 43, 44]
+        significado:
+          type: string
+          description: Significado simbólico popular do animal.
+          example: "O Cavalo representa liberdade e movimento no imaginário popular."
+
+    Interpretacao:
+      type: object
+      properties:
+        tipo:
+          type: string
+          description: Modalidade de interpretação detectada/utilizada.
+          enum: [sonho, placa, palpite, numero, data, cor, generalizado, numerica, fonetica]
+          example: "sonho"
+        animal:
+          type: string
+          description: Animal principal da interpretação.
+          example: "Cobra"
+        grupo:
+          type: integer
+          description: Número do grupo do animal (1–25).
+          example: 9
+        dezenas:
+          type: array
+          items:
+            type: string
+          description: Dezenas do grupo, formatadas com zero à esquerda (ex.:  "03").
+          example: ["33", "34", "35", "36"]
+        justificativa:
+          type: string
+          description: Explicação criativa e detalhada da interpretação.
+          example: "A cobra representa sabedoria ancestral..."
+        confianca:
+          type: string
+          enum: [alta, media, baixa]
+          description: Nível de confiança da interpretação segundo o LLM.
+          example: "alta"
+        variacoes:
+          type: object
+          description: Dois animais alternativos sugeridos pelo LLM.
+          properties:
+            alternativa1:
+              type: string
+              example: "Cavalo"
+            alternativa2:
+              type: string
+              example: "Águia"
+        curiosidade:
+          type: string
+          description: Fato curioso sobre o animal no contexto do jogo do bicho.
+          example: "A cobra é um dos animais mais apostados nas sextas-feiras."
+
+    SugestoesAposta:
+      type: object
+      properties:
+        grupo:
+          type: object
+          properties:
+            tipo:
+              type: string
+              example: "animal"
+            valor:
+              type: string
+              description: Nome do animal.
+              example: "Cobra"
+            multiplicador:
+              type: string
+              example: "18x"
+            aposta_minima:
+              type: number
+              example: 2
+            premio_estimado:
+              type: string
+              example: "36x o valor"
+        dezena:
+          type: object
+          properties:
+            tipo:
+              type: string
+              example: "dezena"
+            valor:
+              type: string
+              description: Dezena de 2 dígitos.
+              example: "35"
+            multiplicador:
+              type: string
+              example: "60x"
+            aposta_minima:
+              type: number
+              example: 1
+            premio_estimado:
+              type: string
+              example: "60x o valor"
+        milhar_sugerida:
+          type: object
+          properties:
+            tipo:
+              type: string
+              example: "milhar"
+            valor:
+              type: string
+              description: Milhar de 4 dígitos.
+              example: "3542"
+            multiplicador:
+              type: string
+              example: "4000x"
+            aposta_minima:
+              type: number
+              example: 0.50
+            premio_estimado:
+              type: string
+              example: "2000x o valor"
+
+    Palpite:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Posição do palpite (1, 2 ou 3).
+          example: 1
+        animal:
+          type: string
+          example: "Tigre"
+        grupo:
+          type: integer
+          example: 22
+        dezenas:
+          type: array
+          items:
+            type: integer
+          example: [85, 86, 87, 88]
+        justificativa:
+          type: string
+          description: Primeiros 150 caracteres da justificativa do LLM.
+          example: "O Tigre surge com força neste dia especial..."
+        forca:
+          type: string
+          enum: [alta, media, baixa]
+          example: "alta"
+
+    SomaNumerologica:
+      type: object
+      properties:
+        valor:
+          type: integer
+          description: Soma direta dos números fornecidos.
+          example: 43
+        reducao:
+          type: integer
+          description: Redução numerológica (soma mod 9, ou 9 se resultado for 0).
+          example: 7
+        animal_correspondente:
+          type: string
+          description: Animal do grupo calculado a partir da soma (soma mod 25 + 1).
+          example: "Borboleta"
+
+    # ── Responses ──────────────────────────────────────────────────────────
+
+    ApiInfo:
+      type: object
+      properties:
+        nome:
+          type: string
+          example: "API Místico dos Bichos v3 - Sem Hardcode 🎭"
+        versao:
+          type: string
+          example: "3.0.0"
+        filosofía:
+          type: string
+        endpoints:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+              method:
+                type: string
+              desc:
+                type: string
+        exemplos:
+          type: object
+        aviso:
+          type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [online]
+          example: "online"
+        llm_provider:
+          type: string
+          enum: [gemini, openai]
+          example: "gemini"
+        llm_status:
+          type: string
+          enum: [configured, using_emergency_mode]
+          description: >
+            `configured` quando a API key do provedor está definida.
+            `using_emergency_mode` quando não há API key — o sistema usa
+            lógica de emergência local (sem LLM externo).
+          example: "configured"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-04-04T12:00:00.000Z"
+
+    TabelaAnimaisResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        total_animais:
+          type: integer
+          example: 25
+        animais:
+          type: array
+          items:
+            $ref: "#/components/schemas/Animal"
+
+    InterpretarResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        metadata:
+          type: object
+          properties:
+            input_recebido:
+              type: string
+              example: "sonhei que nadava com golfinhos"
+            modalidade:
+              type: string
+              example: "sonho"
+            timestamp:
+              type: string
+              format: date-time
+              example: "2026-04-04T12:00:00.000Z"
+            tempo_processamento_ms:
+              type: integer
+              description: Tempo de resposta em milissegundos.
+              example: 1243
+            fonte_interpretacao:
+              type: string
+              enum: [llm, emergencia, emergencia_parse, emergencia_validacao]
+              description: >
+                Indica se a interpretação veio do LLM ou de uma das camadas de
+                fallback de emergência local.
+              example: "llm"
+        interpretacao:
+          $ref: "#/components/schemas/Interpretacao"
+        sugestoes_aposta:
+          $ref: "#/components/schemas/SugestoesAposta"
+        mensagem_orientadora:
+          type: string
+          description: Mensagem motivacional aleatória baseada na confiança e animal.
+          example: "🌟 Conexão forte com o Cobra! Os sinais estão alinhados."
+
+    SonhoResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        sonho:
+          type: string
+          description: O sonho original enviado pelo usuário.
+          example: "um leão me perseguia"
+        interpretacao_onirica:
+          type: object
+          properties:
+            simbolo_principal:
+              type: string
+              description: Animal identificado como símbolo do sonho.
+              example: "Leão"
+            significado:
+              type: string
+              description: Justificativa onírica gerada pelo LLM.
+              example: "O leão em perseguição representa um desafio de liderança..."
+            acao_recomendada:
+              type: string
+              description: Sugestão de aposta derivada do sonho.
+              example: "Baseado neste sonho, considere apostar no Leão (Grupo 16)"
+            forca_do_sinal:
+              type: string
+              description: Força do sinal onírico com emoji.
+              enum:
+                - "🌕 Muito forte"
+                - "🌗 Moderada"
+                - "🌑 Sutil"
+              example: "🌕 Muito forte"
+        mensagem_espiritual:
+          type: string
+          description: Mensagem espiritual combinando o animal e sua curiosidade.
+          example: "✨ Seu subconsciente escolheu o Leão como mensageiro. ..."
+
+    PalpiteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: string
+          format: date
+          description: Data de referência usada para os palpites.
+          example: "2026-04-04"
+        contexto_usado:
+          type: string
+          example: "hoje é meu aniversário"
+        palpites_do_dia:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/Palpite"
+        palpite_principal:
+          type: object
+          description: Destaque do dia — sempre o primeiro palpite gerado.
+          properties:
+            animal:
+              type: string
+              example: "Tigre"
+            grupo:
+              type: integer
+              example: 22
+            mensagem:
+              type: string
+              example: "🎯 DESTAQUE DO DIA: Tigre está com energia máxima!"
+
+    NumerologiaResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        numeros_analisados:
+          type: array
+          nullable: true
+          items:
+            type: integer
+          example: [7, 14, 22]
+        nome_analisado:
+          type: string
+          nullable: true
+          example: null
+        resultado:
+          type: object
+          properties:
+            animal_da_sorte:
+              type: string
+              example: "Cavalo"
+            grupo:
+              type: integer
+              example: 11
+            dezenas:
+              type: array
+              items:
+                type: integer
+              example: [41, 42, 43, 44]
+            soma_numerologica:
+              nullable: true
+              description: Presente somente quando `numeros` foi enviado na requisição.
+              allOf:
+                - $ref: "#/components/schemas/SomaNumerologica"
+        analise_completa:
+          type: string
+          description: Análise numerológica completa gerada pelo LLM.
+          example: "Os números 7, 14 e 22 formam uma tríade poderosa..."
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Forneça um 'input' para interpretação"
+
+    # ── x402 Protocol types (for documentation purposes) ──────────────────
+
+    PaymentRequired:
+      type: object
+      description: |
+        Objeto transmitido no header `PAYMENT-REQUIRED` (base64-encoded).
+        Segue o x402 Protocol v2.
+      properties:
+        x402Version:
+          type: integer
+          example: 2
+        resource:
+          type: object
+          properties:
+            url: { type: string }
+            description: { type: string }
+            mimeType: { type: string }
+        accepts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentOption"
+
+    PaymentOption:
+      type: object
+      properties:
+        scheme:
+          type: string
+          example: "exact"
+        network:
+          type: string
+          description: CAIP-2 network identifier
+          example: "eip155:84532"
+        amount:
+          type: string
+          description: Price in token atomic units (USDC has 6 decimals)
+          example: "10000"
+        asset:
+          type: string
+          description: ERC-20 contract address of the payment token
+          example: "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+        payTo:
+          type: string
+          description: Server's receiving wallet address
+          example: "0xYourEvmAddress"
+        maxTimeoutSeconds:
+          type: integer
+          example: 60
+        extra:
+          type: object
+          properties:
+            name: { type: string, example: "USDC" }
+            version: { type: string, example: "2", description: "EIP-712 domain version for EIP-3009 signing" }
+
+    PaymentPayload:
+      type: object
+      description: |
+        Objeto transmitido no header `PAYMENT-SIGNATURE` (base64-encoded).
+        Contém a assinatura EIP-3009 gerada pela carteira do usuário.
+      properties:
+        x402Version:
+          type: integer
+          example: 2
+        resource:
+          type: object
+        accepted:
+          $ref: "#/components/schemas/PaymentOption"
+        payload:
+          type: object
+          properties:
+            signature:
+              type: string
+              description: EIP-3009 TransferWithAuthorization signature (0x...)
+            authorization:
+              type: object
+              properties:
+                from: { type: string }
+                to: { type: string }
+                value: { type: string }
+                validAfter: { type: string }
+                validBefore: { type: string }
+                nonce: { type: string }

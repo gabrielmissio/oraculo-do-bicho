@@ -1,0 +1,19 @@
+{
+  "name": "oraculo-do-bicho-server",
+  "version": "3.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "dotenvx run -- node index.js",
+    "dev": "dotenvx run -- node --watch index.js"
+  },
+  "dependencies": {
+    "@x402/core": "^2.9.0",
+    "@x402/evm": "^2.9.0",
+    "@x402/express": "^2.9.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@dotenvx/dotenvx": "^1.59.1"
+  }
+}
