@@ -2,6 +2,25 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Oraculo do Bicho — Express API on Lambda + API Gateway HTTP API (v2)
 
+# Non-secret config — overridable at deploy time.
+Parameters:
+  LlmProvider:
+    Type: String
+    Default: gemini
+    AllowedValues: [gemini, openai]
+  LlmTimeout:
+    Type: String
+    Default: '10000'
+  FacilitatorUrl:
+    Type: String
+    Default: 'https://x402.org/facilitator'
+  PricePerRequest:
+    Type: String
+    Default: '0.01'
+  X402Network:
+    Type: String
+    Default: 'eip155:84532'
+
 Globals:
   Function:
     Timeout: 20
@@ -36,6 +55,21 @@ Resources:
       CodeUri: server/
       Handler: index.handler
       Description: Oraculo do Bicho Express server
+      Environment:
+        Variables:
+          # Non-sensitive config values
+          LLM_TIMEOUT: !Ref LlmTimeout
+          LLM_PROVIDER: !Ref LlmProvider
+          X402_NETWORK: !Ref X402Network
+          FACILITATOR_URL: !Ref FacilitatorUrl
+          PRICE_PER_REQUEST: !Ref PricePerRequest
+
+          # Is it a sensitive value?
+          EVM_ADDRESS: ''
+          
+          # Sensitive config values
+          GEMINI_API_KEY: ''
+          OPENAI_API_KEY: ''
       Events:
         ApiRoot:
           Type: HttpApi

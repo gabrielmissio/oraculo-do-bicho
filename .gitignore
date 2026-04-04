@@ -1,3 +1,4 @@
 .env
 .aws-sam/
 node_modules/
+env.local.json
