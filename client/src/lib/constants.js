@@ -2,12 +2,12 @@
 export const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 export const ENDPOINTS = {
-  interpretar: `${API_BASE}/api/interpretar`,
-  sonho: `${API_BASE}/api/sonho`,
-  palpite: `${API_BASE}/api/palpite`,
-  numerologia: `${API_BASE}/api/numerologia`,
-  tabela: `${API_BASE}/api/tabela/animais`,
-  health: `${API_BASE}/api/health`,
+  interpretar: `${API_BASE}/interpretar`,
+  sonho: `${API_BASE}/sonho`,
+  palpite: `${API_BASE}/palpite`,
+  numerologia: `${API_BASE}/numerologia`,
+  tabela: `${API_BASE}/tabela/animais`,
+  health: `${API_BASE}/health`,
 };
 
 // x402 prices (mirror server config — used for UX labels only)

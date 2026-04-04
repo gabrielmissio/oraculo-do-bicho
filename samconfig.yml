@@ -3,6 +3,7 @@ version: 0.1
 default:
   global:
     parameters:
+      region: us-east-1
       stack_name: oraculo-do-bicho
 
   build:
@@ -12,14 +13,13 @@ default:
 
   deploy:
     parameters:
+      s3_prefix: oraculo-do-bicho
+      resolve_s3: true
       capabilities: CAPABILITY_IAM
       confirm_changeset: true
-      resolve_s3: true
-      region: us-east-1
+      # region: us-east-1
       # Override non-secret config without editing the template.
-      parameter_overrides:
-        - LlmProvider=openai
-        - LlmTimeout=10000
-        - PricePerRequest=0.25
-        - X402Network=eip155:84532
-        - FacilitatorUrl=https://x402.org/facilitator
+      parameter_overrides: LlmProvider="openai" LlmTimeout="10000" 
+        FacilitatorUrl="https://x402.org/facilitator" PricePerRequest="0.25" 
+        X402Network="eip155:84532"
+      image_repositories: []

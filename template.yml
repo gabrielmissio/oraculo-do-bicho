@@ -31,6 +31,7 @@ Globals:
       - x86_64
 
 Resources:
+  # ── Backend: Lambda + API Gateway HTTP API ─────────────────────────────────
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -84,6 +85,81 @@ Resources:
             Path: /{proxy+}
             Method: ANY
 
+  # ── Frontend: S3 + CloudFront ──────────────────────────────────────────────
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'oraculo-do-bicho-frontend-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  FrontendOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}'
+
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${AWS::StackName} frontend'
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100  # US, Canada, Europe — cheapest tier
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''  # must be empty when using OAC
+            OriginAccessControlId: !GetAtt FrontendOAC.Id
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          # AWS Managed-CachingOptimized policy
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          # AWS Managed-SecurityHeadersPolicy
+          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+        # SPA fallback: send any 403/404 from S3 to index.html so the React
+        # router handles the path client-side.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
 Outputs:
   ApiUrl:
     Description: API Gateway HTTP API endpoint URL
@@ -91,3 +167,9 @@ Outputs:
   FunctionArn:
     Description: Lambda function ARN
     Value: !GetAtt OraculoFunction.Arn
+  FrontendBucketName:
+    Description: S3 bucket — deploy frontend assets here (sam deploy does not upload them)
+    Value: !Ref FrontendBucket
+  FrontendUrl:
+    Description: CloudFront distribution URL
+    Value: !Sub 'https://${FrontendDistribution.DomainName}'
