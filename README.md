@@ -32,7 +32,13 @@
 
 ## 📸 Demo
 
-> _Adicione prints do frontend aqui_
+🌐 **[Acesse a demo ao vivo → (clique aqui)](https://d25vojrv8r28xx.cloudfront.net)**
+
+> Para usar os endpoints pagos você precisa de uma carteira EVM com USDC na rede **Base Sepolia** (testnet):
+>
+> 1. Instale a [MetaMask](https://metamask.io/download/) ou qualquer carteira compatível com WalletConnect
+> 2. Adicione a rede **Base Sepolia** à sua carteira
+> 3. Obtenha USDC de teste no [Circle USDC Faucet](https://faucet.circle.com/)
 
 | Home | Interpretar | Resultado |
 |------|-------------|-----------|
@@ -42,7 +48,7 @@
 |--------|----------|-------------|
 | ![Sonhos](docs/screenshots/sonho.png) | ![Palpites](docs/screenshots/palpite.png) | ![Numerologia](docs/screenshots/numerologia.png) |
 
-| Tabela dos Bichos | Wallet Conectada |
+| Tabela dos Bichos | Conectar Wallet  |
 |-------------------|------------------|
 | ![Tabela](docs/screenshots/tabela.png) | ![Wallet](docs/screenshots/wallet.png) |
 
