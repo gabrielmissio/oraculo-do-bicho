@@ -660,7 +660,7 @@ components:
           type: array
           items:
             type: string
-          description: Dezenas do grupo, formatadas com zero à esquerda (ex.:  "03").
+          description: 'Dezenas do grupo, formatadas com zero à esquerda (ex.:  "03").'
           example: ["33", "34", "35", "36"]
         justificativa:
           type: string
