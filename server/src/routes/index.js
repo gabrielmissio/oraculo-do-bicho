@@ -184,4 +184,24 @@ router.post('/numerologia', async (req, res) => {
   });
 });
 
+// ── 404 Fallback ─────────────────────────────────────────────────────────────
+const ROTAS_DISPONIVEIS = [
+  { method: 'GET',  path: '/' },
+  { method: 'GET',  path: '/health' },
+  { method: 'GET',  path: '/tabela/animais' },
+  { method: 'POST', path: '/interpretar' },
+  { method: 'POST', path: '/sonho' },
+  { method: 'POST', path: '/palpite' },
+  { method: 'POST', path: '/numerologia' },
+];
+
+router.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Rota não encontrada',
+    rota_acessada: `${req.method} ${req.path}`,
+    rotas_disponiveis: ROTAS_DISPONIVEIS.map(({ method, path }) => `${method} ${path}`),
+  });
+});
+
 export default router;

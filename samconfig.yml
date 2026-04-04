@@ -1,0 +1,18 @@
+version: 0.1
+
+default:
+  global:
+    parameters:
+      stack_name: oraculo-do-bicho
+
+  build:
+    parameters:
+      cached: true
+      parallel: true
+
+  deploy:
+    parameters:
+      capabilities: CAPABILITY_IAM
+      confirm_changeset: true
+      resolve_s3: true
+      region: us-east-1

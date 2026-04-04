@@ -4,14 +4,16 @@
   "type": "module",
   "scripts": {
     "start": "dotenvx run -- node index.js",
-    "dev": "dotenvx run -- node --watch index.js"
+    "dev": "dotenvx run -- node --watch index.js",
+    "dev:legacy": "dotenvx run -- node --watch server.js"
   },
   "dependencies": {
     "@x402/core": "^2.9.0",
     "@x402/evm": "^2.9.0",
     "@x402/express": "^2.9.0",
     "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "serverless-http": "^4.0.0"
   },
   "devDependencies": {
     "@dotenvx/dotenvx": "^1.59.1"

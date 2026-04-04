@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Oraculo do Bicho — Express API on Lambda + API Gateway HTTP API (v2)
+
+Globals:
+  Function:
+    Timeout: 20
+    MemorySize: 256
+    Runtime: nodejs24.x
+    Architectures:
+      # - arm64
+      - x86_64
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - Payment-Signature
+          - X-Payment
+        AllowMethods:
+          - '*'
+        ExposeHeaders:
+          - Payment-Required
+          - Payment-Response
+
+  OraculoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: server/
+      Handler: index.handler
+      Description: Oraculo do Bicho Express server
+      Events:
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /
+            Method: ANY
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway HTTP API endpoint URL
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/'
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt OraculoFunction.Arn
