@@ -14,6 +14,7 @@
   <a href="#-stack">Stack</a> •
   <a href="#-estrutura-do-repositório">Estrutura</a> •
   <a href="#-como-rodar">Como Rodar</a> •
+  <a href="#️-deploy-na-aws">Deploy na AWS</a> •
   <a href="#-pagamentos-x402">Pagamentos x402</a> •
   <a href="#-api-reference">API Reference</a> •
   <a href="#-licença">Licença</a>
@@ -223,6 +224,135 @@ npm run client       # só o frontend Vite
 ```bash
 npm run client:build   # gera client/dist/
 npm run server         # inicia servidor em modo produção
+```
+
+---
+
+## ☁️ Deploy na AWS
+
+A infraestrutura é gerenciada via **AWS SAM** (template.yml + samconfig.yml) e cria:
+
+| Recurso | Serviço AWS |
+|---------|-------------|
+| API REST | API Gateway HTTP API (v2) |
+| Backend | Lambda (Node.js 24, x86_64) |
+| Frontend | S3 (privado) + CloudFront |
+| Segredos | SSM Parameter Store (SecureString) |
+
+### Pré-requisitos
+
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) configurado (`aws configure`)
+- [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+- [Docker](https://docs.docker.com/get-docker/) (para `sam build --use-container` e `sam local`)
+- Node.js 24+
+
+### 1. Crie os segredos no SSM Parameter Store
+
+Estes parâmetros são referenciados pelo `template.yml` e nunca entram no código-fonte.
+
+```bash
+aws ssm put-parameter \
+  --name /oraculo-do-bicho/gemini_api_key \
+  --value "SUA_CHAVE_GEMINI" \
+  --type SecureString
+
+aws ssm put-parameter \
+  --name /oraculo-do-bicho/openai_api_key \
+  --value "SUA_CHAVE_OPENAI" \
+  --type SecureString
+
+# Deixe vazio para desativar pagamentos x402
+aws ssm put-parameter \
+  --name /oraculo-do-bicho/evm_address \
+  --value "0xSuaCarteiraAqui" \
+  --type SecureString
+```
+
+> Para atualizar um parâmetro existente adicione `--overwrite`.
+
+### 2. Configure as variáveis do cliente
+
+Crie `client/.env.production` com a URL da API (disponível após o primeiro deploy):
+
+```env
+VITE_WALLETCONNECT_PROJECT_ID=seu-project-id
+VITE_API_URL=https://<api-id>.execute-api.us-east-1.amazonaws.com
+VITE_X402_NETWORK=eip155:84532
+```
+
+### 3. Build
+
+```bash
+# Backend (SAM empacota server/ com suas dependências)
+sam build
+
+# Frontend
+npm run client:build
+```
+
+### 4. Deploy da infraestrutura + backend
+
+```bash
+sam deploy
+```
+
+O SAM usa as configurações de `samconfig.yml`. Na primeira execução será criado o bucket S3 de artefatos automaticamente (`resolve_s3: true`).
+
+Após o deploy, anote as URLs nos Outputs:
+
+```
+Outputs:
+  ApiUrl          → https://<id>.execute-api.us-east-1.amazonaws.com/
+  FrontendUrl     → https://<id>.cloudfront.net
+  FrontendBucketName → oraculo-do-bicho-frontend-<account>-us-east-1
+```
+
+### 5. Upload do frontend para o S3
+
+```bash
+aws s3 sync client/dist/ \
+  s3://$(aws cloudformation describe-stack-resource \
+    --stack-name oraculo-do-bicho \
+    --logical-resource-id FrontendBucket \
+    --query 'StackResourceDetail.PhysicalResourceId' \
+    --output text) \
+  --delete
+```
+
+### 6. Invalide o cache do CloudFront
+
+```bash
+DIST_ID=$(aws cloudformation describe-stack-resource \
+  --stack-name oraculo-do-bicho \
+  --logical-resource-id FrontendDistribution \
+  --query 'StackResourceDetail.PhysicalResourceId' \
+  --output text)
+
+aws cloudfront create-invalidation \
+  --distribution-id "$DIST_ID" \
+  --paths '/*'
+```
+
+### Desenvolvimento local com SAM
+
+Para testar o Lambda localmente antes de subir:
+
+```bash
+# Copie o template de variáveis locais
+cp env.local.json.example env.local.json
+# Preencha os valores reais em env.local.json (arquivo está no .gitignore)
+
+sam build && sam local start-api --env-vars env.local.json
+# API disponível em http://127.0.0.1:3000
+```
+
+### Remover toda a infraestrutura
+
+```bash
+# Esvazie o bucket antes (o CloudFormation não apaga buckets com objetos)
+aws s3 rm s3://oraculo-do-bicho-frontend-<account>-us-east-1 --recursive
+
+sam delete
 ```
 
 ---
