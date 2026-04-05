@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { CustomConnectButton } from '@/components/CustomConnectButton';
 import { Sparkles, Moon, Home, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,10 +42,7 @@ export function Layout({ children }) {
             ))}
           </nav>
 
-          <ConnectButton
-            chainStatus="icon"
-            showBalance={{ smallScreen: false, largeScreen: true }}
-          />
+          <CustomConnectButton />
         </div>
 
         {/* Mobile nav */}
