@@ -59,20 +59,22 @@ class RoutingFacilitatorClient {
     return { kinds, extensions: [], signers: {} };
   }
   verify(paymentPayload, paymentRequirements) {
-    console.log('[routing-facilitator] verify | network=%s amount=%s asset=%s payTo=%s',
+    console.log('[routing-facilitator] verify | network=%s amount=%s asset=%s payTo=%s extra=%j',
       paymentPayload.accepted?.network ?? paymentPayload.network,
       paymentRequirements?.amount,
       paymentRequirements?.asset,
       paymentRequirements?.payTo,
+      paymentRequirements?.extra,
     );
     return this._pick(paymentPayload).verify(paymentPayload, paymentRequirements);
   }
   settle(paymentPayload, paymentRequirements) {
-    console.log('[routing-facilitator] settle | network=%s amount=%s asset=%s payTo=%s',
+    console.log('[routing-facilitator] settle | network=%s amount=%s asset=%s payTo=%s extra=%j',
       paymentPayload.accepted?.network ?? paymentPayload.network,
       paymentRequirements?.amount,
       paymentRequirements?.asset,
       paymentRequirements?.payTo,
+      paymentRequirements?.extra,
     );
     return this._pick(paymentPayload).settle(paymentPayload, paymentRequirements);
   }
@@ -126,7 +128,8 @@ export function createPaymentMiddleware() {
     url: env.FACILITATOR_URL,
     ...(env.FACILITATOR_TOKEN && {
       createAuthHeaders: async () => ({
-        headers: { Authorization: `Bearer ${env.FACILITATOR_TOKEN}` },
+        verify: { Authorization: `Bearer ${env.FACILITATOR_TOKEN}` },
+        settle: { Authorization: `Bearer ${env.FACILITATOR_TOKEN}` },
       }),
     }),
   });

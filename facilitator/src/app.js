@@ -16,6 +16,7 @@ app.use((req, res, next) => {
   if (!env.INTERNAL_TOKEN || req.path === '/supported') return next();
   const auth = req.headers['authorization'] ?? '';
   if (auth !== `Bearer ${env.INTERNAL_TOKEN}`) {
+    console.warn(`⚠️  Unauthorized request to ${req.path}`);
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
