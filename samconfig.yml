@@ -17,9 +17,6 @@ default:
       resolve_s3: true
       capabilities: CAPABILITY_IAM
       confirm_changeset: true
-      # region: us-east-1
       # Override non-secret config without editing the template.
       parameter_overrides: LlmProvider="openai" LlmTimeout="10000" 
-        FacilitatorUrl="https://x402.org/facilitator" PricePerRequest="0.25" 
-        X402Network="eip155:84532"
       image_repositories: []

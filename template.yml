@@ -16,7 +16,10 @@ Parameters:
     Default: 'https://x402.org/facilitator'
   PricePerRequest:
     Type: String
-    Default: '0.01'
+    Default: '0.10'
+  PricePalpite:
+    Type: String
+    Default: '0.25'
   X402Network:
     Type: String
     Default: 'eip155:84532'
@@ -58,17 +61,14 @@ Resources:
       Description: Oraculo do Bicho Express server
       Environment:
         Variables:
-          # Non-sensitive config values
           LLM_TIMEOUT: !Ref LlmTimeout
           LLM_PROVIDER: !Ref LlmProvider
           X402_NETWORK: !Ref X402Network
           FACILITATOR_URL: !Ref FacilitatorUrl
           PRICE_PER_REQUEST: !Ref PricePerRequest
+          PRICE_PALPITE: !Ref PricePalpite
 
-          # Is it a sensitive value?
-          EVM_ADDRESS: ''
-          
-          # Sensitive config values
+          EVM_ADDRESS: ''          
           GEMINI_API_KEY: ''
           OPENAI_API_KEY: ''
       Events:

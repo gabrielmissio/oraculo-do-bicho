@@ -5,7 +5,7 @@ import env from '../config/env.js';
 
 function buildPayableRoutes() {
   const price = `$${env.PRICE_PER_REQUEST}`;
-  const pricePalpite = `$${(parseFloat(env.PRICE_PER_REQUEST) * 2).toFixed(3)}`;
+  const pricePalpite = `$${env.PRICE_PALPITE}`;
   const base = { scheme: 'exact', network: env.X402_NETWORK, payTo: env.EVM_ADDRESS };
 
   return {

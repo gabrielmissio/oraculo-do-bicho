@@ -12,10 +12,10 @@ export const ENDPOINTS = {
 
 // x402 prices (mirror server config — used for UX labels only)
 export const PRICES = {
-  interpretar: '$0.01',
-  sonho: '$0.01',
-  palpite: '$0.02',
-  numerologia: '$0.01',
+  interpretar: '$0.10',
+  sonho: '$0.10',
+  palpite: '$0.25',
+  numerologia: '$0.10',
 };
 
 export const NETWORK = import.meta.env.VITE_X402_NETWORK ?? 'eip155:84532';
