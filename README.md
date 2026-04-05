@@ -255,6 +255,7 @@ A infraestrutura é gerenciada via **AWS SAM** (template.yml + samconfig.yml) e 
 ### 1. Crie os segredos no SSM Parameter Store
 
 Estes parâmetros são referenciados pelo `template.yml` e nunca entram no código-fonte.
+(TODO: adicionar obs para deixar claro que só precisamos de uma das opçoes (openai|gemini))
 
 ```bash
 aws ssm put-parameter \
