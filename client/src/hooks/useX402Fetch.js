@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useAccount, useSignTypedData } from 'wagmi';
+import { useAccount, useChainId, useSignTypedData, useSwitchChain } from 'wagmi';
 import { TRANSFER_AUTHORIZATION_TYPES } from '@/lib/constants';
 
 /**
@@ -18,7 +18,9 @@ import { TRANSFER_AUTHORIZATION_TYPES } from '@/lib/constants';
  */
 export function useX402Fetch() {
   const { address, isConnected } = useAccount();
+  const currentChainId = useChainId();
   const { signTypedDataAsync } = useSignTypedData();
+  const { switchChainAsync } = useSwitchChain();
 
   const fetchWithPayment = useCallback(
     async (url, options = {}) => {
@@ -48,6 +50,16 @@ export function useX402Fetch() {
       if (!accepted) throw new Error('No EVM-compatible payment option offered by server.');
 
       const chainId = parseInt(accepted.network.split(':')[1], 10);
+
+      // ── Step 3b: switch wallet to the required chain if needed ────────────
+      if (currentChainId !== chainId) {
+        try {
+          await switchChainAsync({ chainId });
+        } catch (err) {
+          throw new Error(`Troque sua carteira para a rede correta (chain ID ${chainId}): ${err.message}`);
+        }
+      }
+
       const now = Math.floor(Date.now() / 1000);
       const validAfter = now - 1;
       const validBefore = now + (accepted.maxTimeoutSeconds ?? 60);
@@ -115,7 +127,7 @@ export function useX402Fetch() {
         },
       });
     },
-    [address, isConnected, signTypedDataAsync],
+    [address, isConnected, signTypedDataAsync, currentChainId, switchChainAsync],
   );
 
   return {

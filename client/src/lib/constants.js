@@ -23,6 +23,8 @@ export const NETWORK = import.meta.env.VITE_X402_NETWORK ?? 'eip155:84532';
 export const NETWORK_LABELS = {
   'eip155:84532': 'Base Sepolia (testnet)',
   'eip155:8453': 'Base (mainnet)',
+  'eip155:137': 'Polygon (mainnet)',
+  'eip155:80002': 'Polygon Amoy (testnet)',
 };
 
 // EIP-3009 typed data — matches what the server's x402 middleware expects

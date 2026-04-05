@@ -23,7 +23,7 @@ export function WalletStatus() {
     <Alert variant="warning">
       <Wallet className="h-4 w-4" />
       <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
-        <span>Conecte sua carteira para pagar as consultas via x402 (USDC na Base).</span>
+        <span>Conecte sua carteira para pagar as consultas via x402 (USDC).</span>
         <ConnectButton />
       </AlertDescription>
     </Alert>

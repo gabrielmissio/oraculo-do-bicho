@@ -1,0 +1,17 @@
+{
+  "name": "oraculo-do-bicho-facilitator",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "dotenvx run -- node index.js",
+    "dev": "dotenvx run -- node --watch index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@dotenvx/dotenvx": "^1.59.1"
+  }
+}
