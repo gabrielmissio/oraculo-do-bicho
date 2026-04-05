@@ -141,6 +141,9 @@ export function useX402Fetch() {
         },
       });
       console.debug('[x402] final response status:', finalResponse.status);
+      if (finalResponse.ok) {
+        window.dispatchEvent(new CustomEvent('x402:payment-success'));
+      }
       return finalResponse;
     },
     [address, isConnected, signTypedDataAsync, currentChainId, switchChainAsync],

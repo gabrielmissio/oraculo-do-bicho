@@ -1,4 +1,5 @@
 import { useAccount, useBalance, useChainId } from 'wagmi';
+import { useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Wallet } from 'lucide-react';
 import { USDC_ADDRESSES } from '@/lib/constants';
@@ -9,15 +10,26 @@ export function WalletStatus() {
   const chainId = useChainId();
   const usdcAddress = USDC_ADDRESSES[chainId];
 
-  const { data: nativeBal, isLoading: nativeLoading } = useBalance({
+  const { data: nativeBal, isLoading: nativeLoading, refetch: refetchNative } = useBalance({
     address,
     query: { enabled: Boolean(address) },
   });
-  const { data: usdcBal, isLoading: usdcLoading, isError: usdcError } = useBalance({
+  const { data: usdcBal, isLoading: usdcLoading, isError: usdcError, refetch: refetchUsdc } = useBalance({
     address,
     token: usdcAddress,
     query: { enabled: Boolean(address) && !!usdcAddress },
   });
+
+  useEffect(() => {
+    const handler = () => {
+      // Settlement tx needs to be mined before the balance reflects on-chain.
+      // Retry at 3s and 8s to catch both fast and slow blocks.
+      setTimeout(() => { refetchNative(); refetchUsdc(); }, 3000);
+      setTimeout(() => { refetchNative(); refetchUsdc(); }, 8000);
+    };
+    window.addEventListener('x402:payment-success', handler);
+    return () => window.removeEventListener('x402:payment-success', handler);
+  }, [refetchNative, refetchUsdc]);
 
   if (isConnected) {
     return (
