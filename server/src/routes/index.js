@@ -35,10 +35,11 @@ router.get('/', (_req, res) => {
 
 // ── Health ───────────────────────────────────────────────────────────────────
 router.get('/health', (_req, res) => {
+  const llm = getLLMConfig();
   res.json({
     status: 'online',
-    llm_provider: getLLMConfig().provider,
-    llm_status: getLLMConfig().apiKey ? 'configured' : 'using_emergency_mode',
+    llm_provider: llm.provider,
+    llm_status: llm.apiKey ? 'configured' : 'using_emergency_mode',
     x402_active: !!env.EVM_ADDRESS,
     timestamp: new Date().toISOString(),
   });

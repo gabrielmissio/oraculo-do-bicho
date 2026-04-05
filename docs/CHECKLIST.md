@@ -66,7 +66,7 @@
 
 | ID | Item | Status | Notes |
 |----|------|--------|-------|
-| GIT-01 | Complete `.gitignore` (OS artifacts, coverage, logs, `.env.keys`) | ⬜ | |
+| GIT-01 | Complete `.gitignore` (OS artifacts, coverage, logs, `.env.keys`) | ✅ | `**/.env` + `**/.env.*` catch all variants; `!**/.env.example` negation; `.env.keys`, `.DS_Store`, `coverage/`, `*.log` added |
 | GIT-02 | PR and issue templates (`.github/`) | ✅ | `PULL_REQUEST_TEMPLATE.md`, `bug_report.md`, `feature_request.md` |
 | GIT-03 | `CONTRIBUTING.md` | ✅ | Dev setup, branch strategy, commit conventions, structure cheat-sheet |
 | GIT-04 | `commitlint` + `husky` | ⬜ | |
@@ -114,12 +114,12 @@
 
 | Category | Done | Partial | Total |
 |----------|------|---------|-------|
-| 🚨 Critical | 5/6 | 0 | 6 |
+| 🚨 Critical | 6/6 | 0 | 6 |
 | ⚠️ Medium | 5/6 | 0 | 6 |
 | 🔵 Code Quality | 3/10 | 0 | 10 |
 | 🏗️ Infrastructure | 2/7 | 0 | 7 |
-| 🌿 Git | 3/6 | 0 | 6 |
+| 🌿 Git | 4/6 | 0 | 6 |
 | ⚙️ CI/CD | 0/5 | 0 | 5 |
 | 📦 Dependencies | 1/4 | 0 | 4 |
 | 📄 Documentation | 0/5 | 0 | 5 |
-| **Total** | **19/49** | **0** | **49** |
+| **Total** | **21/49** | **0** | **49** |

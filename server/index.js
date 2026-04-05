@@ -8,6 +8,6 @@ const initPromise = loadCredentials();
 const _handler = serverless(app);
 
 export const handler = async (event, context) => {
-  await initPromise;
+  await initPromise; // NOTE: never throws an error
   return _handler(event, context);
 };
