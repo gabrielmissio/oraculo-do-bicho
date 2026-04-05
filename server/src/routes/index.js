@@ -20,7 +20,7 @@ router.get('/', (_req, res) => {
       { path: '/tabela/animais', method: 'GET', desc: 'Tabela completa com significados', payable: false },
     ],
     pagamentos: env.EVM_ADDRESS
-      ? { ativo: true, rede: env.X402_NETWORK, preco: `$${env.PRICE_PER_REQUEST} USDC` }
+      ? { ativo: true, redes: ['eip155:137', 'eip155:8453', 'eip155:80002', 'eip155:84532'], preco: `$${env.PRICE_PER_REQUEST} USDC` }
       : { ativo: false },
     aviso: '⚠️ 100% educacional',
   });

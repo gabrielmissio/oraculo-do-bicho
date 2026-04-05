@@ -17,10 +17,6 @@ Parameters:
   PricePalpite:
     Type: String
     Default: '0.25'
-  X402Network:
-    Type: String
-    Default: 'eip155:84532'
-
   # Facilitator shared secret — generate with: openssl rand -hex 32
   # Set via parameter_overrides or inject post-deploy via aws ssm.
   FacilitatorToken:
@@ -36,6 +32,9 @@ Parameters:
   FacilitatorRpc8453:
     Type: String
     Default: 'https://mainnet.base.org'
+  FacilitatorRpc80002:
+    Type: String
+    Default: 'https://rpc-amoy.polygon.technology'
 
 Globals:
   Function:
@@ -60,8 +59,9 @@ Resources:
       Environment:
         Variables:
           INTERNAL_TOKEN: !Ref FacilitatorToken
-          RPC_137:  !Ref FacilitatorRpc137
-          RPC_8453: !Ref FacilitatorRpc8453
+          RPC_137:   !Ref FacilitatorRpc137
+          RPC_8453:  !Ref FacilitatorRpc8453
+          RPC_80002: !Ref FacilitatorRpc80002
           # PRIVATE_KEY: ''  ← set via aws lambda update-function-configuration
           #                     or aws ssm put-parameter after first deploy
 
@@ -94,13 +94,13 @@ Resources:
         Variables:
           LLM_TIMEOUT: !Ref LlmTimeout
           LLM_PROVIDER: !Ref LlmProvider
-          X402_NETWORK: !Ref X402Network
-          FACILITATOR_URL: !GetAtt FacilitatorFunction.FunctionUrl
+          FACILITATOR_URL: !GetAtt FacilitatorFunctionUrl.FunctionUrl
           FACILITATOR_TOKEN: !Ref FacilitatorToken
           PRICE_PER_REQUEST: !Ref PricePerRequest
           PRICE_PALPITE: !Ref PricePalpite
+          # Networks are hardcoded in payment.js — no X402_NETWORK env var needed
 
-          EVM_ADDRESS: ''          
+          EVM_ADDRESS: '0xd67f86f5fEd2dFfEA7CAc66f52b8D56EEE235a7c'          
           GEMINI_API_KEY: ''
           OPENAI_API_KEY: ''
       Events:
@@ -201,7 +201,7 @@ Outputs:
     Value: !GetAtt OraculoFunction.Arn
   FacilitatorUrl:
     Description: Facilitator Lambda Function URL (internal — protected by Bearer token)
-    Value: !GetAtt FacilitatorFunction.FunctionUrl
+    Value: !GetAtt FacilitatorFunctionUrl.FunctionUrl
   FrontendBucketName:
     Description: S3 bucket — deploy frontend assets here (sam deploy does not upload them)
     Value: !Ref FrontendBucket

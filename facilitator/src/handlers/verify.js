@@ -14,13 +14,19 @@ export async function verifyHandler(req, res) {
     return res.status(400).json({ isValid: false, invalidReason: 'MissingFields' });
   }
 
+  const start = Date.now();
   try {
     const result = await verifyEip3009(clients, paymentPayload, paymentRequirements);
-    if (!result.isValid) console.warn('[verify] rejected:', result.invalidReason, '| network:', paymentPayload.accepted?.network);
+    const ms = Date.now() - start;
+    if (result.isValid) {
+      console.log('[verify] ok | payer=%s network=%s ms=%d', result.payer, paymentPayload.accepted?.network, ms);
+    } else {
+      console.warn('[verify] rejected | reason=%s payer=%s network=%s ms=%d', result.invalidReason, result.payer, paymentPayload.accepted?.network, ms);
+    }
     // Always 200 — @x402/core only reads the body on response.ok; 4xx/5xx are thrown as errors
     return res.status(200).json(result);
   } catch (err) {
-    console.error('[verify] unexpected error:', err);
+    console.error('[verify] unexpected error after %dms:', Date.now() - start, err);
     return res.status(500).json({ isValid: false, invalidReason: 'InternalError' });
   }
 }

@@ -31,12 +31,19 @@ export async function settleHandler(req, res) {
     });
   }
 
+  const start = Date.now();
   try {
     const result = await settleEip3009(clients, paymentPayload, paymentRequirements);
+    const ms = Date.now() - start;
+    if (result.success) {
+      console.log('[settle] success | tx=%s network=%s payer=%s ms=%d', result.transaction, result.network, result.payer, ms);
+    } else {
+      console.warn('[settle] failed | reason=%s network=%s payer=%s ms=%d', result.errorReason, result.network, result.payer, ms);
+    }
     // Always 200 — @x402/core only reads the body on response.ok; 4xx/5xx are thrown as errors
     return res.status(200).json(result);
   } catch (err) {
-    console.error('[settle] unexpected error:', err);
+    console.error('[settle] unexpected error after %dms:', Date.now() - start, err);
     return res.status(500).json({
       success: false,
       transaction: '',

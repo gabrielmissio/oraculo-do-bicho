@@ -70,7 +70,8 @@ export async function verifyEip3009(clients, payload, requirements) {
   const payer = authorization.from;
 
   console.log('[verify] network=%s payer=%s amount=%s payTo=%s', network, payer, authorization.value, authorization.to);
-  console.log('[verify] requirements.extra=%j accepted.extra=%j', requirements.extra, payload.accepted?.extra);
+  console.log('[verify] requirements | asset=%s amount=%s payTo=%s extra=%j', requirements.asset, requirements.amount, requirements.payTo, requirements.extra);
+  console.log('[verify] accepted.extra=%j', payload.accepted?.extra);
 
   const client = clients[network];
   if (!client) {
@@ -129,9 +130,11 @@ export async function verifyEip3009(clients, payload, requirements) {
     });
 
     if (!isValid) {
+      console.warn('[verify] ErrInvalidSignature | domain=%j', domain);
       return { isValid: false, invalidReason: 'ErrInvalidSignature', payer };
     }
-  } catch {
+  } catch (err) {
+    console.error('[verify] verifyTypedData threw | domain=%j error=%s', domain, err.message);
     return { isValid: false, invalidReason: 'ErrInvalidSignature', payer };
   }
 

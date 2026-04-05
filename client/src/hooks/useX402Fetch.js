@@ -43,19 +43,29 @@ export function useX402Fetch() {
         throw new Error('Malformed PAYMENT-REQUIRED header (base64/JSON error).');
       }
 
-      // ── Step 3: pick first EVM-compatible option ──────────────────────────
-      const accepted = paymentRequired.accepts?.find(
+      console.debug('[x402] 402 received | resource:', paymentRequired.resource);
+      console.debug('[x402] accepts:', JSON.stringify(paymentRequired.accepts?.map(a => ({ network: a.network, amount: a.amount, asset: a.asset }))));
+      console.debug('[x402] wallet chain:', currentChainId);
+
+      // ── Step 3: pick accepted option — prefer current wallet chain ────────
+      const allOptions = paymentRequired.accepts?.filter(
         (a) => a.scheme === 'exact' && a.network?.startsWith('eip155:'),
-      );
+      ) ?? [];
+      const accepted =
+        allOptions.find((a) => parseInt(a.network.split(':')[1], 10) === currentChainId) ??
+        allOptions[0];
       if (!accepted) throw new Error('No EVM-compatible payment option offered by server.');
 
       const chainId = parseInt(accepted.network.split(':')[1], 10);
+      console.debug('[x402] picked network:', accepted.network, '| chainId:', chainId, '| matched current chain:', chainId === currentChainId);
 
       // ── Step 3b: switch wallet to the required chain if needed ────────────
       if (currentChainId !== chainId) {
+        console.debug('[x402] switching chain from', currentChainId, 'to', chainId);
         try {
           await switchChainAsync({ chainId });
         } catch (err) {
+          console.error('[x402] chain switch failed:', err.message);
           throw new Error(`Troque sua carteira para a rede correta (chain ID ${chainId}): ${err.message}`);
         }
       }
@@ -88,13 +98,16 @@ export function useX402Fetch() {
 
       let signature;
       try {
+        console.debug('[x402] signing | domain:', JSON.stringify(domain), '| value:', accepted.amount, '| to:', accepted.payTo);
         signature = await signTypedDataAsync({
           domain,
           types: TRANSFER_AUTHORIZATION_TYPES,
           primaryType: 'TransferWithAuthorization',
           message,
         });
+        console.debug('[x402] signature ok, length:', signature.length);
       } catch (err) {
+        console.error('[x402] signing failed:', err.message);
         throw new Error(`Payment signing rejected or failed: ${err.message}`);
       }
 
@@ -119,13 +132,16 @@ export function useX402Fetch() {
       const paymentSignature = btoa(JSON.stringify(paymentPayload));
 
       // ── Step 6: retry with PAYMENT-SIGNATURE ─────────────────────────────
-      return fetch(url, {
+      console.debug('[x402] retrying with payment signature...');
+      const finalResponse = await fetch(url, {
         ...options,
         headers: {
           ...options.headers,
           'PAYMENT-SIGNATURE': paymentSignature,
         },
       });
+      console.debug('[x402] final response status:', finalResponse.status);
+      return finalResponse;
     },
     [address, isConnected, signTypedDataAsync, currentChainId, switchChainAsync],
   );

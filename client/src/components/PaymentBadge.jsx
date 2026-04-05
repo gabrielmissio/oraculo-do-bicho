@@ -2,14 +2,16 @@ import { Coins, Wifi } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { NETWORK_LABELS } from '@/lib/constants';
 import { useServerInfo } from '@/hooks/useServerInfo';
+import { useChainId } from 'wagmi';
 
 export function PaymentBadge({ price, className }) {
   const { networks } = useServerInfo();
+  const currentChainId = useChainId();
 
-  // Show label for first network; fall back to the raw ID if unknown
-  const networkLabel = networks.length > 0
-    ? (NETWORK_LABELS[networks[0]] ?? networks[0])
-    : null;
+  // Prefer the network matching the connected wallet chain; fall back to first offered
+  const currentNetwork = `eip155:${currentChainId}`;
+  const activeNetwork = networks.includes(currentNetwork) ? currentNetwork : networks[0];
+  const networkLabel = activeNetwork ? (NETWORK_LABELS[activeNetwork] ?? activeNetwork) : null;
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>

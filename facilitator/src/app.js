@@ -21,12 +21,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Request logger
-app.use((req, _res, next) => {
-  if (req.path !== '/supported') {
-    console.log(`\n→ ${req.method} ${req.path}`);
-    if (Object.keys(req.body ?? {}).length) console.log(JSON.stringify(req.body, null, 2));
-  }
+// Request logger — logs entry and, on finish, status + duration
+app.use((req, res, next) => {
+  if (req.path === '/supported') return next();
+  const start = Date.now();
+  console.log(`→ ${req.method} ${req.path}`);
+  if (Object.keys(req.body ?? {}).length) console.log(JSON.stringify(req.body, null, 2));
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'log';
+    console[level](`← ${req.method} ${req.path} ${res.statusCode} (${ms}ms)`);
+  });
   next();
 });
 
