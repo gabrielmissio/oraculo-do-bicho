@@ -1,5 +1,36 @@
+# Secrets — never commit any .env variant except examples
 .env
+**/.env
+**/.env.*
+!**/.env.example
+
+# dotenvx private key (public key .env.keys is safe, private key is not)
+.env.keys
+
+# Build outputs
 dist/
+**/dist/
+
+# AWS SAM build artefacts
 .aws-sam/
+
+# Dependencies
 node_modules/
+
+# Local config overrides
 env.local.json
+
+# OS / editor artefacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test coverage
+coverage/
+.coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
