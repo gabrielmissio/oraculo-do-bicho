@@ -1,10 +1,11 @@
-import LLM_CONFIG from './src/config/llm.js';
+import getLLMConfig from './src/config/llm.js';
 import env from './src/config/env.js';
 import app from './src/app.js';
 
 app.listen(env.PORT, () => {
+  const llm = getLLMConfig();
   console.log(`\n🎭 Oráculo do Bicho API v3 · http://localhost:${env.PORT}`);
-  console.log(`🤖 LLM Provider : ${LLM_CONFIG.provider}`);
+  console.log(`🤖 LLM Provider : ${llm.provider}`);
   console.log(
     `💳 x402 payments: ${
       env.EVM_ADDRESS

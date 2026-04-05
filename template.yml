@@ -11,6 +11,9 @@ Parameters:
   LlmTimeout:
     Type: String
     Default: '10000'
+  GeminiModel:
+    Type: String
+    Default: 'gemini-2.0-flash'
   FacilitatorUrl:
     Type: String
     Default: 'https://x402.org/facilitator'
@@ -20,6 +23,14 @@ Parameters:
   X402Network:
     Type: String
     Default: 'eip155:84532'
+  SecretsArn:
+    Type: String
+    Default: ''
+    Description: |
+      ARN of the Secrets Manager secret containing LLM API keys.
+      The secret must be a JSON object with GEMINI_API_KEY and/or OPENAI_API_KEY.
+      Secret name must start with "oraculo-do-bicho" to match the IAM policy.
+      Leave empty to pass API keys via plain environment variables.
 
 Globals:
   Function:
@@ -61,16 +72,30 @@ Resources:
           # Non-sensitive config values
           LLM_TIMEOUT: !Ref LlmTimeout
           LLM_PROVIDER: !Ref LlmProvider
+          GEMINI_MODEL: !Ref GeminiModel
           X402_NETWORK: !Ref X402Network
           FACILITATOR_URL: !Ref FacilitatorUrl
           PRICE_PER_REQUEST: !Ref PricePerRequest
 
-          # Is it a sensitive value?
+          # CORS — set to your CloudFront domain in production
+          # ALLOWED_ORIGINS: 'https://your-cloudfront-domain.cloudfront.net'
+
+          # Secrets Manager ARN — preferred over plain-text API keys
+          SECRETS_ARN: !Ref SecretsArn
+
+          # EVM wallet address (non-secret, identifies where payments go)
           EVM_ADDRESS: ''
-          
-          # Sensitive config values
+
+          # Fallback plain-text API keys — only used when SECRETS_ARN is empty
           GEMINI_API_KEY: ''
           OPENAI_API_KEY: ''
+      Policies:
+        - Statement:
+            - Sid: ReadApiSecrets
+              Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              # Scope to secrets with the project prefix — adjust if you use a different naming scheme
+              Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:oraculo-do-bicho*'
       Events:
         ApiRoot:
           Type: HttpApi

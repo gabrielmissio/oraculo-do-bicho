@@ -2,8 +2,15 @@ import { Router } from 'express';
 import TABELA_COMPLETA from '../data/tabela.js';
 import { interpretarComLLM } from '../services/llmService.js';
 import { gerarMensagemOrientadora, obterSignificadoAnimal } from '../helpers/mensagens.js';
-import LLM_CONFIG from '../config/llm.js';
+import getLLMConfig from '../config/llm.js';
 import env from '../config/env.js';
+import { validate } from '../middleware/validate.js';
+import {
+  InterpretarSchema,
+  SonhoSchema,
+  PalpiteSchema,
+  NumerologiaSchema,
+} from '../schemas/requests.js';
 
 const router = Router();
 
@@ -30,8 +37,8 @@ router.get('/', (_req, res) => {
 router.get('/health', (_req, res) => {
   res.json({
     status: 'online',
-    llm_provider: LLM_CONFIG.provider,
-    llm_status: LLM_CONFIG.apiKey ? 'configured' : 'using_emergency_mode',
+    llm_provider: getLLMConfig().provider,
+    llm_status: getLLMConfig().apiKey ? 'configured' : 'using_emergency_mode',
     x402_active: !!env.EVM_ADDRESS,
     timestamp: new Date().toISOString(),
   });
@@ -52,12 +59,8 @@ router.get('/tabela/animais', (_req, res) => {
 });
 
 // ── POST /interpretar (payable) ───────────────────────────────────────────────
-router.post('/interpretar', async (req, res) => {
+router.post('/interpretar', validate(InterpretarSchema), async (req, res) => {
   const { input, modalidade } = req.body;
-
-  if (!input) {
-    return res.status(400).json({ success: false, message: "Forneça um 'input' para interpretação" });
-  }
 
   const startTime = Date.now();
   const interpretacao = await interpretarComLLM(input, modalidade);
@@ -95,12 +98,8 @@ router.post('/interpretar', async (req, res) => {
 });
 
 // ── POST /sonho (payable) ────────────────────────────────────────────────────
-router.post('/sonho', async (req, res) => {
+router.post('/sonho', validate(SonhoSchema), async (req, res) => {
   const { sonho, detalhes } = req.body;
-
-  if (!sonho) {
-    return res.status(400).json({ success: false, message: 'Descreva seu sonho para interpretação' });
-  }
 
   const contexto = detalhes ? `Detalhes adicionais: ${detalhes}` : '';
   const interpretacao = await interpretarComLLM(sonho, 'sonho', contexto);
@@ -124,7 +123,7 @@ router.post('/sonho', async (req, res) => {
 });
 
 // ── POST /palpite (payable) ──────────────────────────────────────────────────
-router.post('/palpite', async (req, res) => {
+router.post('/palpite', validate(PalpiteSchema), async (req, res) => {
   const { contexto, data } = req.body;
   const dataReferencia = data || new Date().toISOString().split('T')[0];
 
@@ -155,7 +154,7 @@ router.post('/palpite', async (req, res) => {
 });
 
 // ── POST /numerologia (payable) ──────────────────────────────────────────────
-router.post('/numerologia', async (req, res) => {
+router.post('/numerologia', validate(NumerologiaSchema), async (req, res) => {
   const { numeros, nome } = req.body;
 
   let inputNumerico = numeros ? numeros.join(' ') : '';

@@ -1,12 +1,29 @@
 import TABELA_COMPLETA from '../data/tabela.js';
 
+/**
+ * Strips sequences commonly used in prompt injection attacks and enforces a
+ * character budget. Applied on every user-supplied string before it enters
+ * the prompt.
+ */
+function sanitizeUserInput(text, maxLength = 500) {
+  return text
+    .slice(0, maxLength)
+    .replace(/`{3,}/g, "'''")     // neutralise backtick fences
+    .replace(/\n{3,}/g, '\n\n'); // collapse excessive newlines
+}
+
 export function criarPromptInterpretacao(input, modalidade, contextoAdicional = '') {
+  const safeInput = sanitizeUserInput(input);
+  const safeContexto = contextoAdicional ? sanitizeUserInput(contextoAdicional, 1000) : '';
+
   return `
 Você é um místico especialista em interpretação de sinais para o "jogo do bicho" (contexto cultural brasileiro).
 
-INPUT DO USUÁRIO: "${input}"
+<user_input>
+${safeInput}
+</user_input>
 MODALIDADE: ${modalidade || 'automática (decida baseado no input)'}
-${contextoAdicional}
+${safeContexto}
 
 REGRAS IMPORTANTES:
 1. Use APENAS os 25 animais oficiais: ${Object.values(TABELA_COMPLETA.animais).join(', ')}

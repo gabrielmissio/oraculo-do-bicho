@@ -1,20 +1,22 @@
-import LLM_CONFIG from '../config/llm.js';
+import getLLMConfig from '../config/llm.js';
 import TABELA_COMPLETA from '../data/tabela.js';
 import { criarPromptInterpretacao, promptEmergencia } from './promptService.js';
 
-function criarSignal() {
+function criarSignal(timeout) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LLM_CONFIG.timeout);
+  const timer = setTimeout(() => controller.abort(), timeout);
   return { signal: controller.signal, clear: () => clearTimeout(timer) };
 }
 
 async function chamarLLM(prompt) {
+  const LLM_CONFIG = getLLMConfig();
+
   if (!LLM_CONFIG.apiKey && LLM_CONFIG.provider !== 'mock') {
     console.warn('⚠️ Sem API key, usando modo emergência criativa');
     return null;
   }
 
-  const { signal, clear } = criarSignal();
+  const { signal, clear } = criarSignal(LLM_CONFIG.timeout);
   console.debug(`🔍 [llm] provider=${LLM_CONFIG.provider} promptLength=${prompt.length}`);
 
   try {
@@ -25,7 +27,7 @@ async function chamarLLM(prompt) {
         method: 'POST',
         headers: { Authorization: `Bearer ${LLM_CONFIG.apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: LLM_CONFIG.model,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.9,
           max_tokens: 500,
@@ -41,7 +43,7 @@ async function chamarLLM(prompt) {
       return data.choices[0].message.content;
     } else if (LLM_CONFIG.provider === 'gemini') {
       response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${LLM_CONFIG.apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${LLM_CONFIG.model}:generateContent?key=${LLM_CONFIG.apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
