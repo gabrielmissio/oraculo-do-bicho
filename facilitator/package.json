@@ -9,6 +9,7 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "serverless-http": "^4.0.0",
     "viem": "^2.21.0"
   },
   "devDependencies": {

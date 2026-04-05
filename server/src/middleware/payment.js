@@ -62,7 +62,14 @@ export function createPaymentMiddleware() {
     return null;
   }
 
-  const facilitator = new HTTPFacilitatorClient({ url: env.FACILITATOR_URL });
+  const facilitator = new HTTPFacilitatorClient({
+    url: env.FACILITATOR_URL,
+    ...(env.FACILITATOR_TOKEN && {
+      createAuthHeaders: async () => ({
+        headers: { Authorization: `Bearer ${env.FACILITATOR_TOKEN}` },
+      }),
+    }),
+  });
   const resourceServer = new x402ResourceServer(facilitator).register(
     env.X402_NETWORK,
     makeScheme(),

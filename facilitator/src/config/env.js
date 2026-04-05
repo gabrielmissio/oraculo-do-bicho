@@ -22,6 +22,9 @@ function parseNetworks() {
 const env = {
   PORT: process.env.PORT || 3002,
   PRIVATE_KEY: process.env.PRIVATE_KEY || null,
+  // Shared secret that server must send as `Authorization: Bearer <token>`.
+  // If unset the facilitator runs open (useful for local dev).
+  INTERNAL_TOKEN: process.env.INTERNAL_TOKEN || null,
   // Map of network → rpcUrl, populated from RPC_<chainId> env vars
   networks: parseNetworks(),
 };
