@@ -11,18 +11,30 @@ Parameters:
   LlmTimeout:
     Type: String
     Default: '10000'
-  FacilitatorUrl:
-    Type: String
-    Default: 'https://x402.org/facilitator'
   PricePerRequest:
     Type: String
     Default: '0.10'
   PricePalpite:
     Type: String
     Default: '0.25'
-  X402Network:
+  # Facilitator shared secret — generate with: openssl rand -hex 32
+  # Set via parameter_overrides or inject post-deploy via aws ssm.
+  FacilitatorToken:
     Type: String
-    Default: 'eip155:84532'
+    Default: ''
+    NoEcho: true
+
+  # Public RPC endpoints for the facilitator Lambda.
+  # Override at deploy time to use a private / rate-limit-free provider.
+  FacilitatorRpc137:
+    Type: String
+    Default: 'https://polygon-rpc.com'
+  FacilitatorRpc8453:
+    Type: String
+    Default: 'https://mainnet.base.org'
+  FacilitatorRpc80002:
+    Type: String
+    Default: 'https://rpc-amoy.polygon.technology'
 
 Globals:
   Function:
@@ -34,6 +46,25 @@ Globals:
       - x86_64
 
 Resources:
+  # ── Facilitator: Lambda + Function URL ────────────────────────────────────
+  FacilitatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: facilitator/
+      Handler: index.handler
+      Description: x402 facilitator — off-chain verify + on-chain settle EIP-3009
+      Timeout: 60  # settle awaits tx receipt; give plenty of headroom
+      FunctionUrlConfig:
+        AuthType: NONE  # app-layer Bearer token handles authZ
+      Environment:
+        Variables:
+          INTERNAL_TOKEN: !Ref FacilitatorToken
+          RPC_137:   !Ref FacilitatorRpc137
+          RPC_8453:  !Ref FacilitatorRpc8453
+          RPC_80002: !Ref FacilitatorRpc80002
+          # PRIVATE_KEY: ''  ← set via aws lambda update-function-configuration
+          #                     or aws ssm put-parameter after first deploy
+
   # ── Backend: Lambda + API Gateway HTTP API ─────────────────────────────────
   HttpApi:
     Type: AWS::Serverless::HttpApi
@@ -63,12 +94,13 @@ Resources:
         Variables:
           LLM_TIMEOUT: !Ref LlmTimeout
           LLM_PROVIDER: !Ref LlmProvider
-          X402_NETWORK: !Ref X402Network
-          FACILITATOR_URL: !Ref FacilitatorUrl
+          FACILITATOR_URL: !GetAtt FacilitatorFunctionUrl.FunctionUrl
+          FACILITATOR_TOKEN: !Ref FacilitatorToken
           PRICE_PER_REQUEST: !Ref PricePerRequest
           PRICE_PALPITE: !Ref PricePalpite
+          # Networks are hardcoded in payment.js — no X402_NETWORK env var needed
 
-          EVM_ADDRESS: ''          
+          EVM_ADDRESS: '0xd67f86f5fEd2dFfEA7CAc66f52b8D56EEE235a7c'          
           GEMINI_API_KEY: ''
           OPENAI_API_KEY: ''
       Events:
@@ -167,6 +199,9 @@ Outputs:
   FunctionArn:
     Description: Lambda function ARN
     Value: !GetAtt OraculoFunction.Arn
+  FacilitatorUrl:
+    Description: Facilitator Lambda Function URL (internal — protected by Bearer token)
+    Value: !GetAtt FacilitatorFunctionUrl.FunctionUrl
   FrontendBucketName:
     Description: S3 bucket — deploy frontend assets here (sam deploy does not upload them)
     Value: !Ref FrontendBucket

@@ -14,6 +14,7 @@
   <a href="#-stack">Stack</a> •
   <a href="#-estrutura-do-repositório">Estrutura</a> •
   <a href="#-como-rodar">Como Rodar</a> •
+  <a href="#-facilitador-customizado-opcional-recomendado">Facilitador Customizado</a> •
   <a href="#️-deploy-na-aws">Deploy na AWS</a> •
   <a href="#-pagamentos-x402">Pagamentos x402</a> •
   <a href="#-api-reference">API Reference</a> •
@@ -77,6 +78,14 @@ O **Oráculo do Bicho** é uma aplicação full-stack que combina três tecnolog
 | **@x402/express** | Middleware de pagamento x402 |
 | **@x402/evm** | Esquema EVM (EIP-3009 / Base) |
 | **Gemini API / OpenAI API** | Geração de interpretações via LLM |
+| **dotenvx** | Gerenciamento de variáveis de ambiente |
+
+### Facilitador customizado (`facilitator/`)
+| Tecnologia | Função |
+|-----------|--------|
+| **Node.js + Express 5** | Servidor HTTP do facilitador |
+| **viem** | Verificação EIP-712 e submissão on-chain |
+| **serverless-http** | Wrapper para execução como Lambda |
 | **dotenvx** | Gerenciamento de variáveis de ambiente |
 
 ### Frontend (`client/`)
@@ -148,6 +157,22 @@ oraculo-do-bicho/
 │           ├── Numerologia.jsx    # Formulário: lista de números + nome
 │           └── TabelaAnimais.jsx  # Grid dos 25 animais (grátis, sem x402)
 │
+├── facilitator/                   # Facilitador x402 customizado (opcional)
+│   ├── index.js                   # Entrypoint: servidor HTTP + handler Lambda
+│   ├── package.json
+│   ├── .env.example               # Template de variáveis de ambiente
+│   └── src/
+│       ├── app.js                 # Express app + auth middleware + rotas
+│       ├── config/
+│       │   ├── env.js             # Descoberta dinâmica de redes (RPC_<chainId>)
+│       │   └── networks.js        # Criação de clientes viem por rede
+│       ├── evm/
+│       │   └── eip3009.js         # Verificação EIP-712 e liquidação on-chain
+│       └── handlers/
+│           ├── supported.js       # GET /supported — redes e esquemas aceitos
+│           ├── verify.js          # POST /verify — validação off-chain da assinatura
+│           └── settle.js          # POST /settle — submissão da tx on-chain
+│
 ├── doc/
 │   └── spec/
 │       └── openapi.yaml           # OpenAPI 3.0.3 com documentação x402
@@ -211,18 +236,27 @@ VITE_WALLETCONNECT_PROJECT_ID="seu-project-id"
 VITE_X402_NETWORK="eip155:84532"
 ```
 
+### 3.1. Configure o facilitador customizado (opcional, recomendado)
+
+```bash
+cp facilitator/.env.example facilitator/.env
+```
+
+Edite `facilitator/.env` com sua chave privada e RPCs desejados (veja a seção [Facilitador Customizado](#-facilitador-customizado-opcional-recomendado) para detalhes).
+
 ### 4. Rode em desenvolvimento
 
 ```bash
-# Inicia servidor (:3001) + frontend (:5173) simultaneamente
+# Inicia servidor (:3001) + facilitador (:3002) + frontend (:5173) simultaneamente
 npm run dev
 ```
 
 Ou separadamente:
 
 ```bash
-npm run server:dev   # só o servidor, com --watch
-npm run client       # só o frontend Vite
+npm run server:dev      # só o servidor, com --watch
+npm run facilitator:dev # só o facilitador, com --watch
+npm run client          # só o frontend Vite
 ```
 
 ### 5. Build de produção
@@ -231,6 +265,110 @@ npm run client       # só o frontend Vite
 npm run client:build   # gera client/dist/
 npm run server         # inicia servidor em modo produção
 ```
+
+---
+
+## 🔮 Facilitador Customizado (opcional, recomendado)
+
+O repositório inclui um **facilitador x402 próprio** em `facilitator/`. Ele é **opcional** — o servidor funciona perfeitamente com o facilitador público `https://x402.org/facilitator` — mas é **recomendado** quando você quer:
+
+- Liquidar pagamentos em redes **além do Base Sepolia** (Polygon, Base mainnet, Polygon Amoy)
+- Ter **controle total** sobre o processo de verificação e liquidação
+- Operar de forma **independente** de serviços de terceiros em produção
+
+### Como funciona
+
+O facilitador expõe três endpoints que o `@x402/express` consome:
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/supported` | `GET` | Anuncia as redes e esquemas aceitos (sempre público) |
+| `/verify` | `POST` | Valida a assinatura EIP-3009 **off-chain**, sem gas |
+| `/settle` | `POST` | Submete `transferWithAuthorization` **on-chain** via `PRIVATE_KEY` |
+
+O servidor já implementa um `RoutingFacilitatorClient` (em `server/src/middleware/payment.js`) que roteia as requisições: pagamentos em **Base Sepolia** vão para o facilitador público; pagamentos em **Base, Polygon e Polygon Amoy** vão para o facilitador customizado. Esse comportamento é configurável diretamente no arquivo.
+
+### 1. Configure o facilitador
+
+```bash
+cp facilitator/.env.example facilitator/.env
+```
+
+Edite `facilitator/.env`:
+
+```env
+PORT=3002
+
+# Chave privada da carteira que fará os saques on-chain (transferWithAuthorization).
+# Sem ela, /verify funciona mas /settle retorna 501.
+PRIVATE_KEY=0xSuaChavePrivadaAqui
+
+# RPC por rede — adicione uma linha por chainId desejado.
+# O facilitador descobre as redes dinamicamente a partir de RPC_<chainId>.
+RPC_8453=https://mainnet.base.org          # Base mainnet
+RPC_84532=https://sepolia.base.org         # Base Sepolia
+RPC_137=https://polygon-rpc.com            # Polygon mainnet
+RPC_80002=https://rpc-amoy.polygon.technology  # Polygon Amoy (testnet)
+
+# Token de autenticação — o servidor envia como Authorization: Bearer <token>.
+# Deixe vazio para rodar sem autenticação (só para desenvolvimento local).
+INTERNAL_TOKEN=um_segredo_bem_forte
+```
+
+> ⚠️ Nunca exponha `PRIVATE_KEY` ou `INTERNAL_TOKEN` em repositórios públicos. Os arquivos `.env` estão no `.gitignore` e são apenas para desenvolvimento local. Em produção, use um gerenciador de segredos como o **AWS SSM Parameter Store** (já utilizado pelo servidor) ou equivalente.
+
+### 2. Instale as dependências e rode
+
+```bash
+cd facilitator
+npm install
+npm run dev    # inicia com --watch em :3002
+```
+
+### 3. Conecte o servidor ao facilitador
+
+Edite `server/.env` para apontar para o facilitador local e adicionar o token de autenticação:
+
+```env
+FACILITATOR_URL="http://localhost:3002"
+FACILITATOR_TOKEN="um_segredo_bem_forte"   # deve coincidir com INTERNAL_TOKEN do facilitador
+```
+
+> O valor padrão de `FACILITATOR_URL` já é `http://localhost:3002`, então se você rodar o facilitador localmente sem alterar a porta, basta configurar o token.
+
+### 4. Rode tudo junto
+
+O script `npm run dev` na raiz do repositório já inicia **servidor + facilitador + frontend** simultaneamente:
+
+```bash
+npm run dev
+# → servidor    em :3001
+# → facilitador em :3002
+# → frontend    em :5173
+```
+
+Para rodar componentes individualmente:
+
+```bash
+npm run facilitator:dev   # só o facilitador, com --watch
+npm run server:dev        # só o servidor, com --watch
+npm run client            # só o frontend Vite
+```
+
+### Redes suportadas pelo facilitador customizado
+
+| Rede | CAIP-2 | Tipo |
+|------|--------|------|
+| Base mainnet | `eip155:8453` | Produção |
+| Base Sepolia | `eip155:84532` | Testnet |
+| Polygon mainnet | `eip155:137` | Produção |
+| Polygon Amoy | `eip155:80002` | Testnet |
+
+Para adicionar outras redes EVM basta incluir `RPC_<chainId>=<url>` no `facilitator/.env`.
+
+### Deploy na AWS (Lambda)
+
+O facilitador também pode ser implantado como **Lambda + API Gateway** seguindo o mesmo padrão do servidor principal. O `index.js` já exporta um `handler` compatível com `serverless-http`. Nesse caso, configure as variáveis de ambiente e o SSM Parameter Store da mesma forma descrita na seção [Deploy na AWS](#️-deploy-na-aws), apontando `FACILITATOR_URL` do servidor para a URL do API Gateway do facilitador.
 
 ---
 
@@ -406,7 +544,7 @@ Navegador                    Servidor                  Facilitador x402
 ### Ir para mainnet
 
 1. Mude `X402_NETWORK=eip155:8453` no `server/.env`
-2. Mude `FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402`
+2. Configure o facilitador customizado com `RPC_8453=<url-rpc-base-mainnet>` (recomendado) **ou** use o facilitador público da Coinbase: `FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402`
 3. Mude `VITE_X402_NETWORK=eip155:8453` no `client/.env`
 4. Certifique-se que `EVM_ADDRESS` é uma carteira mainnet real
 
@@ -494,7 +632,8 @@ Para customizar, edite as variáveis CSS em [`client/src/index.css`](client/src/
 | `LLM_TIMEOUT` | `10000` | Timeout em ms para chamadas ao LLM |
 | `EVM_ADDRESS` | — | Carteira para receber pagamentos (deixe vazio para desativar x402) |
 | `X402_NETWORK` | `eip155:84532` | Rede CAIP-2 (testnet ou mainnet) |
-| `FACILITATOR_URL` | `https://x402.org/facilitator` | URL do facilitador x402 |
+| `FACILITATOR_URL` | `http://localhost:3002` | URL do facilitador x402 (customizado ou público) |
+| `FACILITATOR_TOKEN` | — | Bearer token para autenticar no facilitador customizado |
 | `PRICE_PER_REQUEST` | `0.01` | Preço em USD por consulta |
 
 ### `client/.env`
@@ -504,6 +643,15 @@ Para customizar, edite as variáveis CSS em [`client/src/index.css`](client/src/
 | `VITE_WALLETCONNECT_PROJECT_ID` | — | Project ID do WalletConnect Cloud |
 | `VITE_API_URL` | `""` | URL base da API (vazio = usa proxy Vite `/api`) |
 | `VITE_X402_NETWORK` | `eip155:84532` | Rede exibida na UI (deve coincidir com o servidor) |
+
+### `facilitator/.env`
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `PORT` | `3002` | Porta do facilitador HTTP |
+| `PRIVATE_KEY` | — | Chave privada para assinar txs on-chain (obrigatória para `/settle`) |
+| `RPC_<chainId>` | — | URL RPC da rede (ex: `RPC_8453=https://mainnet.base.org`) |
+| `INTERNAL_TOKEN` | — | Bearer token que o servidor deve enviar (deixe vazio para dev local) |
 
 ---
 

@@ -5,14 +5,17 @@
   "license": "MIT",
   "workspaces": [
     "server",
-    "client"
+    "client",
+    "facilitator"
   ],
   "scripts": {
     "server": "npm run start --workspace=server",
     "server:dev": "npm run dev --workspace=server",
+    "facilitator": "npm run start --workspace=facilitator",
+    "facilitator:dev": "npm run dev --workspace=facilitator",
     "client": "npm run dev --workspace=client",
     "client:build": "npm run build --workspace=client",
-    "dev": "concurrently \"npm run server:dev\" \"npm run client\"",
+    "dev": "concurrently \"npm run server:dev\" \"npm run facilitator:dev\" \"npm run client\"",
     "install:all": "npm install --workspaces"
   },
   "devDependencies": {
